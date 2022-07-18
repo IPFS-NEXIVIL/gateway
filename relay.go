@@ -1,17 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	swarm "github.com/libp2p/go-libp2p/p2p/net/swarm"
 	relayv1 "github.com/libp2p/go-libp2p/p2p/protocol/circuitv1/relay"
@@ -39,8 +35,6 @@ func start(c *gin.Context) {
 
 	for _, ips := range h2.Addrs() {
 		fmt.Printf("%s/p2p/%s\n", ips, h2.ID())
-		relayHost := fmt.Sprintf("%s/p2p/%s\n", ips, h2.ID())
-		nodeA(relayHost)
 	}
 
 	fmt.Printf("%s/p2p/%s\n", h2.Addrs()[len(h2.Addrs())-1], h2.ID())
@@ -59,63 +53,21 @@ func addr2info(addrStr string) (*peer.AddrInfo, error) {
 	return peer.AddrInfoFromP2pAddr(addr)
 }
 
-func nodeA(relayHost string) {
+const protocolID = "/libp2p/circuit/relay/0.1.0"
 
-	relayHost = strings.TrimSpace(relayHost)
+func connect(c *gin.Context) {
 
-	relayAddrInfo, err := addr2info(relayHost)
-	if err != nil {
-		panic(err)
+	type ContentRequestBody struct {
+		RelayHost string `json:"relay_host"`
+		DialID    string `json:"dial_id"`
 	}
 
-	// Zero out the listen addresses for the host, so it can only communicate
-	// via p2p-circuit
-	h3, err := libp2p.New(libp2p.ListenAddrs(), libp2p.EnableRelay())
-	if err != nil {
-		panic(err)
-	}
+	var requestBody ContentRequestBody
 
-	if err := h3.Connect(context.Background(), *relayAddrInfo); err != nil {
-		panic(err)
-	}
+	c.BindJSON(&requestBody)
 
-	// Now, to test things, let's set up a protocol handler on h3
-	h3.SetStreamHandler("/cats", handleStream)
-
-	nodeAID := fmt.Sprintf("%v", h3.ID())
-
-	fmt.Println("Node A ID: ", nodeAID)
-
-	nodeB(relayHost, nodeAID)
-
-	select {}
-}
-
-func handleStream(s network.Stream) {
-
-	log.Println("sender received new stream")
-	if err := doEcho(s); err != nil {
-		log.Println(err)
-		s.Reset()
-	} else {
-		s.Close()
-	}
-}
-
-// doEcho reads a line of data a stream and writes it back
-func doEcho(s network.Stream) error {
-	buf := bufio.NewReader(s)
-	str, err := buf.ReadString('\n')
-	if err != nil {
-		return err
-	}
-
-	log.Printf("read: %s", str)
-	_, err = s.Write([]byte(str))
-	return err
-}
-
-func nodeB(relayHost string, dialID string) {
+	var relayHost = requestBody.RelayHost
+	var dialID = requestBody.DialID
 
 	relayAddrInfo, err := addr2info(relayHost)
 	if err != nil {
@@ -137,7 +89,7 @@ func nodeB(relayHost string, dialID string) {
 		panic(err)
 	}
 
-	_, err = h1.NewStream(context.Background(), dialNodeID, "/cats")
+	_, err = h1.NewStream(context.Background(), dialNodeID, protocolID)
 	if err == nil {
 		fmt.Println("Didnt actually expect to get a stream here. What happened?")
 		return
@@ -147,8 +99,8 @@ func nodeB(relayHost string, dialID string) {
 
 	h1.Network().(*swarm.Swarm).Backoff().Clear(dialNodeID)
 
-	// Creates a relay address to dial ID using relay host as the relay
 	relayaddr, err := ma.NewMultiaddr(relayHost + "/p2p-circuit/p2p/" + dialNodeID.Pretty())
+
 	if err != nil {
 		panic(err)
 	}
@@ -161,30 +113,6 @@ func nodeB(relayHost string, dialID string) {
 	if err := h1.Connect(context.Background(), h3relayInfo); err != nil {
 		panic(err)
 	}
-
-	// Woohoo! we're connected!
-	s, err := h1.NewStream(context.Background(), dialNodeID, "/cats")
-	if err != nil {
-		fmt.Println("huh, this should have worked: ", err)
-		return
-	}
-
-	log.Println("sender saying hello")
-	_, err = s.Write([]byte("Hello, world!\n"))
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	out, err := ioutil.ReadAll(s)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	log.Printf("read reply: %q\n", out)
-
-	s.Read(make([]byte, 1)) // block until the handler closes the stream
 
 	fmt.Println("end")
 
