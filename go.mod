@@ -7,7 +7,6 @@ require (
 	github.com/libp2p/go-libp2p v0.20.3
 	github.com/libp2p/go-libp2p-core v0.16.1
 	github.com/libp2p/go-libp2p-webrtc-direct v0.0.0-20220406105718-41a3151f0a37
-	github.com/libp2p/go-tcp-transport v0.6.1
 	github.com/multiformats/go-multiaddr v0.5.0
 	github.com/pion/webrtc/v3 v3.1.43
 )
