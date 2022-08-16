@@ -1,0 +1,30 @@
+<html>
+    <body>
+        <h1>
+            {{ .title }}
+        </h1>
+        <script> 
+            $('#file_form').focus();
+            $(document).ready(function() { 
+                // bind 'myForm' and provide a simple callback function 
+                $('#myForm').ajaxForm(function() {
+                    $('#file_form').val('');
+                    $('#file_form').focus();
+                });
+                if (!!window.EventSource) {
+                    var source = new EventSource('start');
+                    source.addEventListener('file', function(e) {
+                        $('#file').append(e.data + "</br>");
+                        $('html, body').animate({scrollTop:$(document).height()}, 'slow');
+                    }, false);
+                } else {
+                    alert("NOT SUPPORTED");
+                }
+            });
+        </script> 
+        <form id="myForm" action="/start" method="post"> 
+        File name: <input id="file_form" name="file">
+        <input type="submit" value="Submit"> 
+        </form>
+    </body>
+</html>
