@@ -20,10 +20,6 @@ type Paste struct {
 	Content string `form:"content" binding:"required"`
 }
 
-type Image struct {
-	DataURL string `form:"dataurl" binding:"required"`
-}
-
 type UploadFile struct {
 	File *multipart.FileHeader `form:"file" binding:"required"`
 }
